@@ -1,0 +1,209 @@
+@startuml
+participant Frontend
+participant TPM
+participant BCM
+participant EPM
+participant IOT
+participant ECM 
+
+activate Frontend
+Frontend->ECM: configuringinformation
+activate ECM #FFBBBB
+ECM-->Frontend: return 
+deactivate ECM
+deactivate Frontend
+
+Frontend->TPM : triggerReplanning
+deactivate Frontend
+
+
+note over BCM,EPM 
+User initiated replanning can go directly to TPM.
+BCM is notified about the updated plan(new 
+TEPs) when the TPM has completed the replanning.
+(Planning and replanning is handled in the same way).
+end note
+
+group loop1 
+  opt
+  TPM->ECM: requestContractInfo(planID, search condition) 
+  activate ECM #FFBBBB
+  ECM-> ECM: findContracts
+  activate ECM #DarkSalmon
+  ECM-->ECM:return 
+  deactivate ECM
+  ECM->TPM: sendContractInfo(planID, list of TSDs providers)
+  activate TPM #FFBBBB
+  deactivate ECM
+  deactivate TPM
+  end
+  
+  opt
+  TPM->ECM: requestSpotMarketInfo(planID, search condition) 
+  activate ECM #FFBBBB
+  ECM-> ECM: findOffers
+  activate ECM #DarkSalmon
+  ECM-->ECM:return 
+  deactivate ECM
+  ECM->TPM: sendSpotMarketInfo(planID, list of TSD offers)
+  activate TPM #FFBBBB
+  deactivate ECM
+  deactivate TPM 	
+  end
+  
+  activate TPM
+  TPM->TPM: transportPlanning
+  activate TPM #FFBBBB
+  TPM-->TPM: return
+  deactivate TPM 
+  deactivate TPM   
+  
+  opt
+  TPM->ECM: checkBookingAgainstAgreement(planID, parties data) 
+  activate TPM
+  activate ECM #FFBBBB
+  ECM-> ECM: checkBooking
+  activate ECM #DarkSalmon
+  ECM-->ECM:return 
+  deactivate ECM
+  ECM->TPM: return
+  deactivate ECM
+  deactivate TPM
+  end
+  
+  activate TPM #FFBBBB
+  TPM->IOT: booking/cancellation
+  activate IOT #FFBBBB
+  IOT-->TPM: return 
+  deactivate IOT 
+  deactivate TPM 
+
+  
+  TPM->IOT: bookingCompleted
+  activate TPM 
+  TPM->TPM:booking complete
+  activate IOT #FFBBBB
+  IOT-->TPM: return 
+  deactivate IOT 
+  activate TPM #FFBBBB
+   TPM-->TPM: return
+  deactivate TPM
+  deactivate TPM
+  deactivate TPM
+
+  
+  TPM->BCM: transportPlanReady ForExecution
+  activate BCM #FFBBBB
+  BCM->TPM: fetchTransportPlan
+   deactivate BCM
+  activate TPM #FFBBBB
+  TPM-->BCM: transmitTransport Plan 
+  deactivate TPM
+ 
+  
+  BCM->EPM: activateRules
+  activate BCM
+  activate EPM #FFBBBB
+  EPM-> EPM: ruleInitialization
+  activate EPM #DarkSalmon
+  EPM-->EPM:return 
+  deactivate EPM
+  EPM-->BCM: return(event types)
+  deactivate BCM
+  deactivate EPM
+  
+  
+  IOT->EPM: emitEvent(raw event)
+  
+  activate BCM #FFBBBB
+  BCM->BCM: createCOs instances
+  activate BCM #DarkSalmon
+  BCM-->BCM:return 
+  deactivate BCM
+  deactivate BCM
+  
+end
+  
+
+group loop2
+BCM->EPM: sendEvent(raw event, data)
+IOT->EPM : emitEvent (raw event)
+
+
+note right of IOT
+The CEP engine can receive at any time events 
+coming from external 
+sources(IOT sensors or 
+backend systems) OR
+from BCM
+end note
+
+activate EPM #FFBBBB
+EPM-> BCM: putDetectedSituation (derived event)
+EPM-> Frontend: putProactiveNotification
+deactivate EPM
+
+activate BCM
+BCM->BCM: updateCOs
+activate BCM #FFBBBB
+deactivate BCM 
+BCM-->BCM:return 
+BCM->Frontend: notifyUser
+deactivate BCM
+end
+
+opt 
+IOT->EPM: bookingCanceled (or other event)
+activate EPM #FFBBBB
+EPM->BCM 
+deactivate EPM
+activate BCM #FFBBBB
+[<-BCM : notifyUser about Events/situations/Need to replan
+BCM->ECM: sendExecutionStatus(planID, slaData)
+activate ECM
+ECM->ECM: Update Contract
+activate ECM #FFBBBB
+ECM-->ECM: return
+deactivate ECM
+deactivate ECM
+
+note over Frontend
+Event Initiated Replanning:
+Replanning is initiated from
+Backend(events received).
+Must notify front end users.
+May cancel booking 
+automatically or not.Then:
+Start regular planning process
+(loop1)
+end note
+
+deactivate BCM
+end 
+
+opt 
+activate BCM #FFBBBB
+BCM->TPM: triggerReplanning
+activate TPM #FFBBBB
+BCM->TPM: sendExecutionStatus(planID, executionStatus)
+deactivate BCM
+deactivate TPM
+
+opt
+TPM->IOT: autoCancellation
+activate TPM
+activate IOT #FFBBBB
+IOT-->TPM: return
+deactivate IOT
+deactivate TPM
+end
+
+activate Frontend 
+Frontend->TPM: triggerReplanning
+note right of TPM
+Go to loop1
+end note
+deactivate Frontend
+end
+
+@enduml 
